@@ -1,0 +1,415 @@
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+
+Question 1: Visualizing the data
+```{r}
+# Installing necessary packages for the project.
+
+library(tidyverse)
+library(imputeTS)
+library(ggplot2)
+#install.packages("rio")
+library(rio)
+#install.packages("kernlab")
+library("kernlab")
+#install.packages("caret")
+library("caret")
+library("ggplot2")
+library("e1071")
+library("rpart")
+#install.packages("rpart.plot")
+library("rpart.plot")
+```
+```{r}
+# Checking for null values in the dataframe by using is.na() function.
+sum(is.na(HeartFailure_1_$age))
+sum(is.na(HeartFailure_1_$anaemia))
+sum(is.na(HeartFailure_1_$creatinine_phosphokinase))
+sum(is.na(HeartFailure_1_$diabetes))
+sum(is.na(HeartFailure_1_$ejection_fraction))
+sum(is.na(HeartFailure_1_$high_blood_pressure))
+sum(is.na(HeartFailure_1_$platelets))
+sum(is.na(HeartFailure_1_$serum_creatinine))
+sum(is.na(HeartFailure_1_$serum_sodium))
+sum(is.na(HeartFailure_1_$sex))
+sum(is.na(HeartFailure_1_$smoking))
+sum(is.na(HeartFailure_1_$time))
+sum(is.na(HeartFailure_1_$DEATH_EVENT))
+```
+```{r}
+summary(HeartFailure_1_)
+# Getting to know the data statistically. The min, max, mean, quartiles, class.
+```
+```{r}
+#install.packages("ggplot2",dependencies=TRUE)
+library(ggplot2)
+```
+
+```{r}
+#Extract the 299 rows for two attributes
+heartfailure2 <- HeartFailure_1_[1:299, c("serum_creatinine", "time", "DEATH_EVENT")]
+```
+```{r}
+plot1<- ggplot(data = heartfailure2)+aes(x=serum_creatinine, y=time) +geom_point(aes(colour = DEATH_EVENT, shape= DEATH_EVENT),size = 3)+scale_shape_binned()+ xlab("Serum_creatinine") + ylab("Time") +ggtitle("Death Event vs erum_creatinine and time") +theme(plot.title = element_text(hjust = 0.5))
+plot1
+```
+
+Question 2a: Perceptrons (with two continuous X variables)
+
+```{r}
+#Map the death_event 0  to -1, 1 to +1
+heartfailure2$death <- lapply(heartfailure2$DEATH_EVENT, function(x) {
+ if(x == 0)
+heartfailure2$death <- -1
+ else if(x == 1)
+ heartfailure2$death <- 1
+ else
+ heartfailure2$death <- NULL
+})
+
+```
+```{r}
+#Separate the data into training and testing.  70% of the data for the training dataset, 30% for the testing dataset. 
+death_index <- sample(nrow(heartfailure2), 0.7 * nrow(heartfailure2))
+death_train <- heartfailure2[death_index, ]
+death_test <- heartfailure2[-death_index, ] 
+```
+
+```{r}
+#Use train data set  to build perceptron model
+#Separate the data into input (X variables) and output (Y variable)
+X <- death_train[, c("serum_creatinine", "time")] # Input Matrix
+y <- death_train$death # Output Vector
+```
+```{r}
+#Perceptron Learning Algorithm
+perceptron <- function(X, Y, numEpochs) {
+ results <- list()
+ w <- runif(ncol(X), -10, 10) #Initalize weights
+
+ # For loop - number of generations(epochs) - number of times dataset is ran through
+ for(j in 1:numEpochs) {
+ predictedResult <- numeric(length=100) # Initalize predictedResult vector
+ numIncorrect = 0 # Keeps track of # of missclassified points
+
+ # For loop - loop throught dataset
+ for(i in 1:length(Y)) {
+ xi = as.numeric(unlist(X[i,])) # Convert dataframe to vector
+ predictedResult[i] = sign(w %*% xi) # Predict the point
+
+ # If predicted point is incorrect - change weight
+ if(predictedResult[i] != Y[i]) {
+ numIncorrect = numIncorrect + 1 # Add one to # of missclassified points
+ w <- w + as.numeric(Y[i]) * xi # Update the weight w <- w + WiXi
+ }
+ }
+ # Print results of this generation(epoch)
+ cat("\nEpoch #: ", j)
+ cat("\nNumber Incorrect: ", numIncorrect)
+ cat("\nFinal Weight: ", w)
+ }
+} 
+```
+
+```{r}
+#Unlisting the Y variable
+Y<-as.numeric(unlist(y))
+```
+```{r}
+perceptron(X,Y,8)
+```
+```{r}
+weight = c(488.8383,-73.32842)
+death_test$Wserum_creatinine <- death_test$serum_creatinine*weight[1]
+death_test$Wtime <- death_test$time*weight[2]
+```
+```{r}
+#Add all calculated weights, and name it as predict
+death_test$predict <- rowSums(death_test[,c("Wserum_creatinine","Wtime")])
+```
+```{r}
+#Use confusion matrix to evaluate the model performance
+perceptronpredicttable <- table(death_test$death == 1 , death_test$predict > 0) + table(death_test$death == -1 , death_test$predict < 0)
+perceptronpredicttable
+```
+
+```{r}
+#get the accuracy rate
+sum(diag(perceptronpredicttable))/sum(perceptronpredicttable)
+```
+
+Question 2a: Perceptrons (with two binary X variables)
+```{r}
+#Extract the 299 rows for two binary attributes
+heartfailure3 <- HeartFailure_1_[1:299, c("high_blood_pressure", "smoking", "DEATH_EVENT")]
+```
+```{r}
+#Map the death_event 0  to -1, 1 to +1
+heartfailure3$death <- lapply(heartfailure3$DEATH_EVENT, function(x) {
+ if(x == 0)
+heartfailure3$death <- -1
+ else if(x == 1)
+ heartfailure3$death <- 1
+ else
+ heartfailure3$death <- NULL
+})
+```
+```{r}
+#Separate the data into training and testing.  70% of the data for the training dataset, 30% for the testing dataset. 
+death_index <- sample(nrow(heartfailure3), 0.7 * nrow(heartfailure3))
+bindeath_train <- heartfailure3[death_index, ]
+bindeath_test <- heartfailure3[-death_index, ] 
+```
+```{r}
+#Use train data set  to build perceptron model
+#Separate the data into input (X variables) and output (Y variable)
+X <- bindeath_train[, c("high_blood_pressure", "smoking")] # Input Matrix
+y <- bindeath_train$death # Output Vector
+
+#Unlisting the Y variable
+#Y<-as.double(unlist(y))
+
+perceptron(X,y,8)
+```
+```{r}
+weight = c(1.846015,-0.8314402)
+bindeath_test$Whigh_blood_pressure <- bindeath_test$high_blood_pressure*weight[1]
+bindeath_test$Wsmoking <- bindeath_test$smoking*weight[2]
+
+```
+```{r}
+#Add all calculated weights, and name it as predict
+bindeath_test$predict <- rowSums(bindeath_test[,c("Whigh_blood_pressure","Wsmoking")])
+
+```
+```{r}
+#Use confusion matrix to evaluate the model performance
+perceptronpredicttable1 <- table(bindeath_test$death == 1 , bindeath_test$predict > 0) + table(bindeath_test$death == -1 , bindeath_test$predict < 0)
+perceptronpredicttable1
+```
+```{r}
+#get the accuracy rate
+sum(diag(perceptronpredicttable1))/sum(perceptronpredicttable1)
+```
+Question 2b: Perceptrons (with three X variables)
+```{r}
+#Extract the 299 rows for three attributes
+heartfailure4 <- HeartFailure_1_[1:299, c("time", "ejection_fraction","age", "DEATH_EVENT")]
+```
+```{r}
+#Map the death_event 0  to -1, 1 to +1
+heartfailure4$death <- lapply(heartfailure4$DEATH_EVENT, function(x) {
+ if(x == 0)
+heartfailure4$death <- -1
+ else if(x == 1)
+ heartfailure4$death <- 1
+ else
+ heartfailure4$death <- NULL
+})
+```
+```{r}
+#Separate the data into training and testing.  70% of the data for the training dataset, 30% for the testing dataset. 
+death_index <- sample(nrow(heartfailure4), 0.7 * nrow(heartfailure4))
+death_train <- heartfailure4[death_index, ]
+death_test <- heartfailure4[-death_index, ] 
+```
+```{r}
+#Use train data set  to build perceptron model
+#Separate the data into input (X variables) and output (Y variable)
+X <- death_train[,c("time", "ejection_fraction","age")] # Input Matrix
+y <- death_train$death # Output Vector
+
+#Unlisting the Y variable
+#Y<-as.double(unlist(y))
+
+perceptron(X,y,8)
+
+```
+```{r}
+weight = c(-70.01471,-314.5915 ,394.9926)
+death_test$Wtime <- death_test$time*weight[1]
+death_test$Wejection_fraction <- death_test$ejection_fraction*weight[2]
+death_test$Wage <- death_test$age*weight[3]
+
+```
+```{r}
+#Add all calculated weights, and name it as predict
+death_test$predict <- rowSums(death_test[,c("Wtime","Wejection_fraction","Wage")])
+```
+```{r}
+#Use confusion matrix to evaluate the model performance
+perceptronpredicttable2 <- table(death_test$death == 1 , death_test$predict > 0) + table(death_test$death == -1 , death_test$predict < 0)
+perceptronpredicttable2
+```
+```{r}
+#get the accuracy rate
+sum(diag(perceptronpredicttable2))/sum(perceptronpredicttable2)
+```
+Question 3a: Support Vector Machines
+```{r}
+install.packages("e1071",dependencies=TRUE)
+library(e1071)
+```
+```{r}
+deathsvm <- svm(DEATH_EVENT~. , data=HeartFailure_1_1_)
+print(deathsvm)
+summary(deathsvm)
+```
+```{r}
+heartsubset <- HeartFailure_1_[ , c("DEATH_EVENT" , "age",  "platelets")]  
+heartsubset$DEATH_EVENT <- as.factor(heartsubset$DEATH_EVENT)
+```
+```{r}
+heart_index <- sample(nrow(heartsubset), 0.7 * nrow(heartsubset) ,replace = FALSE)
+heart_train <- heartsubset [heart_index, ]
+heart_test <- heartsubset [-heart_index, ]
+```
+```{r}
+heartsvm <- svm(DEATH_EVENT ~ age+ platelets, data= heart_train)
+summary(heartsvm)
+```
+```{r}
+plot(heartsvm, heart_train,age ~ platelets)
+```
+
+```{r}
+heartpredict <- predict(heartsvm, newdata = heart_test[,-1], type = "response")
+```
+```{r}
+predicttable <- table(heart_test$DEATH_EVENT == '1', heartpredict =='1')
+predicttable
+```
+```{r}
+#calculate the accuracy
+sum(diag(predicttable))/sum(predicttable)
+```
+
+```{r}
+#For use the caret package for confusion matrix
+#install.packages("caret")
+library(caret)
+confusionMatrix(heartpredict,heart_test$DEATH_EVENT)
+```
+```{r}
+heartsubset1 <- HeartFailure_1_[ , c("DEATH_EVENT" , "smoking",  "diabetes")]  
+heartsubset1$DEATH_EVENT <- as.factor(heartsubset1$DEATH_EVENT)
+```
+```{r}
+heart_index <- sample(nrow(heartsubset1), 0.7 * nrow(heartsubset1) ,replace = FALSE)
+heart_train <- heartsubset1 [heart_index, ]
+heart_test <- heartsubset1 [-heart_index, ]
+```
+```{r}
+library(e1071)
+heartsvm1 <- svm(DEATH_EVENT ~ smoking + diabetes, data = heart_train, kernel = "linear")
+summary(heartsvm1)
+```
+```{r}
+svm_predictions_binary <- predict(heartsvm1, heart_test)
+plot(heartsvm1, heart_train)
+```
+```{r}
+svmModel <- svm(~., data = heart_train, C=5, cross=3, prob.model=TRUE)
+
+# Predicitng values based on the svm model.
+svmPred <- predict(svmModel, heart_train)
+summary(svmPred) # Displaying prediction.
+
+predicttable2<-table(svmPred, heart_train$DEATH_EVENT)
+# This shows the prediction the model makes.
+predicttable2
+sum(diag(predicttable))/sum(predicttable)
+confusionMatrix(svmPred,heart_test$DEATH_EVENT)
+```
+
+```{r}
+heartpredict <- predict(heartsvm1, newdata = heart_test[,-1], type = "response")
+```
+```{r}
+predicttable1 <- table(heart_test$DEATH_EVENT == '1', heartpredict =='1')
+predicttable1
+```
+```{r}
+accuracy_binary <- sum(svm_predictions_binary == heart_test$DEATH_EVENT) / nrow(heart_test)
+cat("Accuracy score of the SVM model with binary x-variables:", accuracy_binary)
+```
+SVM model on the training set with three x-variables
+```{r}
+heartsubset2 <- HeartFailure_1_[ , c("DEATH_EVENT","age","serum_creatinine","ejection_fraction")]  
+heartsubset2$DEATH_EVENT <- as.factor(heartsubset2$DEATH_EVENT)
+```
+```{r}
+heart_index <- sample(nrow(heartsubset2), 0.7 * nrow(heartsubset2) ,replace = FALSE)
+heart_train <- heartsubset2 [heart_index, ]
+heart_test <- heartsubset2 [-heart_index, ]
+```
+```{r}
+heartsvm <- svm(DEATH_EVENT ~  age + serum_creatinine + ejection_fraction, data= heart_train)
+summary(heartsvm)
+```
+```{r}
+plot(heartsvm, heart_train, age ~ serum_creatinine, slice = list(ejection_fraction=50))
+```
+```{r}
+heartpredict <- predict(heartsvm, newdata = heart_test[,-1], type = "response")
+```
+```{r}
+predicttable <- table(heart_test$DEATH_EVENT == '1', heartpredict =='1')
+predicttable
+```
+```{r}
+#calculate the accuracy
+sum(diag(predicttable))/sum(predicttable)
+```
+
+```{r}
+#For use the caret package for confusion matrix
+#install.packages("caret")
+library(caret)
+confusionMatrix(heartpredict,heart_test$DEATH_EVENT)
+```
+SVM model on the training set with four x-variables
+```{r}
+heartsubset3 <- HeartFailure_1_[ , c("DEATH_EVENT","age","serum_creatinine","ejection_fraction","time")]  
+heartsubset3$DEATH_EVENT <- as.factor(heartsubset3$DEATH_EVENT)
+```
+```{r}
+heart_index <- sample(nrow(heartsubset3), 0.7 * nrow(heartsubset2) ,replace = FALSE)
+heart_train <- heartsubset3 [heart_index, ]
+heart_test <- heartsubset3 [-heart_index, ]
+```
+```{r}
+heartsvm <- svm(DEATH_EVENT ~  age + serum_creatinine + ejection_fraction+time, data= heart_train)
+summary(heartsvm)
+```
+```{r}
+plot(heartsvm, heart_train, age ~ serum_creatinine, slice = list(ejection_fraction=50, time=40))
+```
+```{r}
+heartpredict <- predict(heartsvm, newdata = heart_test[,-1], type = "response")
+```
+```{r}
+predicttable <- table(heart_test$DEATH_EVENT == '1', heartpredict =='1')
+predicttable
+```
+```{r}
+#calculate the accuracy
+sum(diag(predicttable))/sum(predicttable)
+```
+
+```{r}
+#For use the caret package for confusion matrix
+#install.packages("caret")
+library(caret)
+confusionMatrix(heartpredict,heart_test$DEATH_EVENT)
+```
+```
+
